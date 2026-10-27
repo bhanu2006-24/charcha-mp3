@@ -68,18 +68,31 @@ def get_local_ip() -> str:
         pass
     return "127.0.0.1"
 
-def generate_qr_code(data: str) -> Image.Image:
-    """Generate a clean QR code PIL Image for the given URL."""
+def generate_qr_code_bytes(data: str) -> bytes:
+    """Generate a high-contrast PNG QR code byte stream (black on white) for 100% scan reliability."""
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=8,
-        border=3,
+        box_size=10,
+        border=2,
     )
     qr.add_data(data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#10b981", back_color="#0f172a")
-    return img
+    img = qr.make_image(fill_color="#000000", back_color="#ffffff")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+def generate_qr_code_base64(data: str) -> str:
+    """Generate a base64 data URI string for embedding directly in HTML."""
+    raw = generate_qr_code_bytes(data)
+    encoded = base64.b64encode(raw).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+def generate_qr_code(data: str) -> Image.Image:
+    """Return PIL image object for QR code."""
+    raw = generate_qr_code_bytes(data)
+    return Image.open(io.BytesIO(raw))
 
 def sanitize_filename(name: str) -> str:
     """Clean filename of characters that are invalid on Mac/Windows/Linux/Android."""
@@ -107,8 +120,87 @@ def format_bytes(num_bytes: Optional[int]) -> str:
         num_bytes /= 1024
     return f"{num_bytes:.1f} TB"
 
+def find_existing_mp3(
+    directory: str,
+    title: str,
+    prefix: Optional[str] = None,
+    min_size_bytes: int = 50000
+) -> Optional[str]:
+    """
+    Checks if a matching completed MP3 file already exists in directory with valid size.
+    Returns the full path if found, otherwise None.
+    """
+    if not os.path.exists(directory):
+        return None
+
+    clean_title = sanitize_filename(title).lower()
+
+    # 1. If prefix is provided (e.g. '01'), check if any file starts with '01 - '
+    if prefix:
+        for p in Path(directory).glob(f"{prefix} - *.mp3"):
+            try:
+                if p.is_file() and p.stat().st_size >= min_size_bytes:
+                    return str(p)
+            except Exception:
+                pass
+
+    # 2. Check all mp3 files for exact or normalized title match
+    for p in Path(directory).glob("*.mp3"):
+        try:
+            if p.is_file() and p.stat().st_size >= min_size_bytes:
+                stem = p.stem.lower()
+                if " - " in stem and stem.split(" - ", 1)[0].isdigit():
+                    stem_no_prefix = stem.split(" - ", 1)[1].strip()
+                else:
+                    stem_no_prefix = stem.strip()
+
+                if stem_no_prefix == clean_title or clean_title in stem_no_prefix or stem_no_prefix in clean_title:
+                    return str(p)
+        except Exception:
+            pass
+
+    return None
+
+def find_incomplete_part(
+    directory: str,
+    title: str,
+    prefix: Optional[str] = None
+) -> Optional[str]:
+    """
+    Checks if an incomplete .part file exists from a previously interrupted download.
+    Returns path to the part file if found, otherwise None.
+    """
+    if not os.path.exists(directory):
+        return None
+
+    clean_title = sanitize_filename(title).lower()
+
+    if prefix:
+        for p in Path(directory).glob(f"{prefix} - *.part"):
+            try:
+                if p.is_file() and p.stat().st_size > 0:
+                    return str(p)
+            except Exception:
+                pass
+
+    for p in Path(directory).glob("*.part"):
+        try:
+            if p.is_file() and p.stat().st_size > 0:
+                stem = p.stem.lower()
+                if " - " in stem and stem.split(" - ", 1)[0].isdigit():
+                    stem_no_prefix = stem.split(" - ", 1)[1].strip()
+                else:
+                    stem_no_prefix = stem.strip()
+                base_name = os.path.splitext(stem_no_prefix)[0]
+                if base_name == clean_title or clean_title in base_name or base_name in clean_title:
+                    return str(p)
+        except Exception:
+            pass
+
+    return None
+
 def get_base_ydl_opts(quiet: bool = True) -> Dict[str, Any]:
-    """Base options for yt-dlp including JS runtimes and ffmpeg."""
+    """Base options for yt-dlp including JS runtimes, ffmpeg, and continuedl."""
     ffmpeg_bin = get_ffmpeg_path()
     node_bin = get_node_path()
 
@@ -116,6 +208,7 @@ def get_base_ydl_opts(quiet: bool = True) -> Dict[str, Any]:
         "quiet": quiet,
         "no_warnings": quiet,
         "ignoreerrors": True,
+        "continuedl": True,       # Resumes interrupted downloads seamlessly!
         "remote_components": ["ejs:github"],
     }
     if ffmpeg_bin:
@@ -255,12 +348,55 @@ def download_track(
     total_tracks: Optional[int] = None,
     embed_thumbnail: bool = True,
     embed_metadata: bool = True,
+    overwrite: bool = False,
+    expected_title: Optional[str] = None,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
     """
     Downloads a single video audio track and converts to high-quality universally playable MP3.
+    - If completed MP3 exists and overwrite is False -> Skips instantly (0 seconds).
+    - If partial .part file exists -> Resumes download from the exact byte offset!
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    # 1. Skip if completed MP3 file already exists
+    if not overwrite and expected_title:
+        existing = find_existing_mp3(output_dir, expected_title, prefix=filename_prefix)
+        if existing and os.path.exists(existing):
+            filesize = os.path.getsize(existing)
+            if progress_callback:
+                progress_callback({
+                    "status": "skipped",
+                    "percent": 100.0,
+                    "message": f"Already complete: {os.path.basename(existing)}"
+                })
+            return {
+                "success": True,
+                "title": expected_title,
+                "filepath": existing,
+                "filesize": filesize,
+                "filesize_str": format_bytes(filesize),
+                "duration": "--",
+                "uploader": "Saved Track",
+                "thumbnail": None,
+                "was_skipped": True,
+                "was_resumed": False,
+            }
+
+    # 2. Check if an incomplete .part file exists to notify resume status
+    was_partial = False
+    if expected_title:
+        part_file = find_incomplete_part(output_dir, expected_title, prefix=filename_prefix)
+        if part_file and os.path.exists(part_file):
+            was_partial = True
+            part_sz = os.path.getsize(part_file)
+            if progress_callback:
+                progress_callback({
+                    "status": "resuming",
+                    "percent": 1.0,
+                    "message": f"Resuming partial download ({format_bytes(part_sz)} already saved)..."
+                })
+
     opts = get_base_ydl_opts(quiet=True)
 
     prefix = f"{filename_prefix} - " if filename_prefix else ""
@@ -315,6 +451,7 @@ def download_track(
     opts.update({
         "format": "bestaudio/best",
         "outtmpl": out_template,
+        "continuedl": True, # Ensure incomplete part files resume
         "postprocessors": postprocessors,
         "postprocessor_args": {
             "ffmpeg": ["-id3v2_version", "3"]
@@ -325,6 +462,32 @@ def download_track(
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
+            # If expected_title wasn't supplied, check title from metadata first
+            if not overwrite and not expected_title:
+                pre_info = ydl.extract_info(url, download=False)
+                if pre_info and pre_info.get("title"):
+                    existing = find_existing_mp3(output_dir, pre_info["title"], prefix=filename_prefix)
+                    if existing and os.path.exists(existing):
+                        filesize = os.path.getsize(existing)
+                        if progress_callback:
+                            progress_callback({
+                                "status": "skipped",
+                                "percent": 100.0,
+                                "message": f"Already complete: {os.path.basename(existing)}"
+                            })
+                        return {
+                            "success": True,
+                            "title": pre_info.get("title"),
+                            "filepath": existing,
+                            "filesize": filesize,
+                            "filesize_str": format_bytes(filesize),
+                            "duration": format_duration(pre_info.get("duration")),
+                            "uploader": pre_info.get("uploader"),
+                            "thumbnail": pre_info.get("thumbnail"),
+                            "was_skipped": True,
+                            "was_resumed": False,
+                        }
+
             info = ydl.extract_info(url, download=True)
             title = info.get("title") or "Audio"
             artist = info.get("uploader") or info.get("channel") or "Unknown Artist"
@@ -355,8 +518,8 @@ def download_track(
                     thumbnail_url=thumbnail,
                 )
 
-            # Cleanup stray non-mp3 intermediate files
-            for ext in [".webm", ".m4a", ".webp", ".jpg", ".part", ".ytdl"]:
+            # Cleanup stray non-mp3 intermediate files (but NEVER delete .part files of other tracks!)
+            for ext in [".webm", ".m4a", ".webp", ".jpg"]:
                 for stray in Path(output_dir).glob(f"*{ext}"):
                     try:
                         os.remove(stray)
@@ -374,12 +537,16 @@ def download_track(
                 "duration": format_duration(info.get("duration")),
                 "uploader": artist,
                 "thumbnail": thumbnail,
+                "was_skipped": False,
+                "was_resumed": was_partial,
             }
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
             "filepath": None,
+            "was_skipped": False,
+            "was_resumed": False,
         }
 
 def download_playlist(
@@ -390,10 +557,13 @@ def download_playlist(
     add_track_numbers: bool = True,
     bitrate: str = "320",
     embed_thumbnail: bool = True,
+    overwrite_existing: bool = False,
     overall_progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Dict[str, Any]:
     """
     Downloads selected tracks from a playlist into high quality MP3s inside a dedicated folder.
+    - Completed tracks -> Skipped instantly.
+    - Incomplete/interrupted tracks (.part) -> Resumed from byte offset!
     """
     playlist_title = playlist_info.get("title") or "Playlist"
     tracks = playlist_info.get("tracks", [])
@@ -411,6 +581,8 @@ def download_playlist(
 
     total_count = len(target_tracks)
     downloaded_tracks = []
+    skipped_tracks = []
+    resumed_tracks = []
     failed_tracks = []
 
     for idx, track in enumerate(target_tracks):
@@ -436,6 +608,7 @@ def download_playlist(
                     "percent": ((idx + (d.get("percent", 0) / 100)) / total_count) * 100,
                     "speed_str": d.get("speed_str", ""),
                     "eta_str": d.get("eta_str", ""),
+                    "message": d.get("message", ""),
                 })
 
         res = download_track(
@@ -447,11 +620,17 @@ def download_playlist(
             track_number=track["index"],
             total_tracks=len(tracks),
             embed_thumbnail=embed_thumbnail,
+            overwrite=overwrite_existing,
+            expected_title=track_title,
             progress_callback=track_sub_progress,
         )
 
         if res.get("success") and res.get("filepath"):
             downloaded_tracks.append(res)
+            if res.get("was_skipped"):
+                skipped_tracks.append(res)
+            elif res.get("was_resumed"):
+                resumed_tracks.append(res)
         else:
             failed_tracks.append({
                 "index": track["index"],
@@ -468,12 +647,19 @@ def download_playlist(
             "percent": 100.0,
         })
 
+    newly_downloaded = len(downloaded_tracks) - len(skipped_tracks) - len(resumed_tracks)
+
     return {
         "success": len(downloaded_tracks) > 0,
         "total_requested": total_count,
         "total_succeeded": len(downloaded_tracks),
+        "total_new": newly_downloaded,
+        "total_resumed": len(resumed_tracks),
+        "total_skipped": len(skipped_tracks),
         "total_failed": len(failed_tracks),
         "downloaded_tracks": downloaded_tracks,
+        "skipped_tracks": skipped_tracks,
+        "resumed_tracks": resumed_tracks,
         "failed_tracks": failed_tracks,
         "target_dir": target_dir,
         "playlist_title": playlist_title,

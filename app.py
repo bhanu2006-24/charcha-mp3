@@ -32,8 +32,8 @@ st.markdown("""
         background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 18px;
-        padding: 24px 28px;
-        margin-bottom: 24px;
+        padding: 22px 26px;
+        margin-bottom: 20px;
         box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(16px);
         display: flex;
@@ -55,7 +55,7 @@ st.markdown("""
 
     .hero-subtitle {
         color: #94a3b8;
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         margin-top: 4px;
         margin-bottom: 0;
     }
@@ -107,14 +107,33 @@ st.markdown("""
         display: inline-block;
     }
 
+    .badge-resume {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        display: inline-block;
+    }
+
     /* Mobile QR Box */
     .phone-box {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px dashed rgba(52, 211, 153, 0.4);
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(52, 211, 153, 0.3);
         border-radius: 14px;
         padding: 14px 18px;
         color: #e2e8f0;
         font-size: 0.88rem;
+    }
+
+    .qr-container {
+        background: #ffffff;
+        padding: 12px;
+        border-radius: 12px;
+        display: inline-block;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
 
     /* Buttons */
@@ -161,22 +180,54 @@ if "last_download" not in st.session_state:
 
 local_ip = core.get_local_ip()
 phone_url = f"http://{local_ip}:8501"
+qr_png_bytes = core.generate_qr_code_bytes(phone_url)
+qr_base64 = core.generate_qr_code_base64(phone_url)
 
-# Sidebar: Controls & Info
+# Sidebar: Controls, QR Code & Info
 with st.sidebar:
     st.markdown("### 🎛️ Audio Settings")
     bitrate = st.selectbox(
         "MP3 Bitrate (Audio Quality)",
         options=["320", "256", "192", "128"],
         index=0,
-        help="320 kbps gives the cleanest, highest studio master audio quality."
+        help="320 kbps gives the highest studio master audio quality."
     )
     embed_art = st.checkbox(
         "Embed Album Cover Art",
         value=True,
-        help="Embeds the YouTube thumbnail directly into the MP3 file tags (shows on lockscreen & Apple Music)."
+        help="Embeds the YouTube thumbnail directly into the MP3 tags (shows on lockscreen & Apple Music)."
     )
+
+    st.markdown("---")
+    st.markdown("### ⏩ Smart Resume / Skip")
+    skip_existing = st.checkbox(
+        "Skip already downloaded tracks",
+        value=True,
+        help="If a track is already in your folder, it will instantly skip it, saving your internet data and time!"
+    )
+    force_overwrite = st.checkbox(
+        "Force re-download / Overwrite",
+        value=False,
+        help="Check this if you specifically want to re-download files that already exist."
+    )
+
+    st.markdown("---")
+    st.markdown("### 📱 Mobile Phone Access")
+    st.caption("Connect your phone to the same Wi-Fi network and scan:")
     
+    # Render QR code prominently with fallback
+    st.markdown(f"""
+    <div style="text-align: center; margin: 10px 0;">
+        <div class="qr-container">
+            <img src="{qr_base64}" style="width: 170px; height: 170px; display: block;" alt="Charcha MP3 Mobile QR" />
+        </div>
+        <p style="font-size: 0.78rem; color: #94a3b8; margin-top: 8px;">
+            Or visit in phone Safari/Chrome:<br>
+            <code style="color: #34d399; font-weight: bold;">{phone_url}</code>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("---")
     st.markdown("### 📁 Downloads Folder")
     st.code(core.DEFAULT_DOWNLOAD_DIR, language="text")
@@ -188,19 +239,7 @@ with st.sidebar:
         st.toast("Opened in Finder!")
 
     st.markdown("---")
-    st.markdown("### 📱 Mobile Access")
-    st.markdown(f"Access on your phone on the same Wi-Fi:")
-    st.code(phone_url, language="text")
-    
-    with st.expander("📷 Scan QR Code on Phone", expanded=False):
-        try:
-            qr_img = core.generate_qr_code(phone_url)
-            st.image(qr_img, caption="Point iPhone/Android camera to open", use_container_width=True)
-        except Exception:
-            pass
-
-    st.markdown("---")
-    st.caption("⚡ Powered by yt-dlp & FFmpeg")
+    st.caption("⚡ Powered by yt-dlp & FFmpeg | ID3v2.3")
 
 # Main Header Banner
 st.markdown(f"""
@@ -209,15 +248,16 @@ st.markdown(f"""
         <h1 class="hero-title">🎵 Charcha MP3</h1>
         <p class="hero-subtitle">Studio-Grade YouTube Video & Full Playlist MP3 Downloader</p>
     </div>
-    <div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <span class="badge-success">● System Ready</span>
         <span class="badge-playlist">⚡ 320k Master</span>
+        <span class="badge-resume">⏩ Smart Resume ON</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # Tabs
-tab_download, tab_library, tab_guide = st.tabs(["⚡ Downloader", "📚 My MP3 Library", "📱 Mobile & Deploy Guide"])
+tab_download, tab_library, tab_guide = st.tabs(["⚡ Downloader", "📚 My MP3 Library", "📱 Mobile & FAQ Guide"])
 
 # TAB 1: DOWNLOADER
 with tab_download:
@@ -300,6 +340,11 @@ with tab_download:
             st.markdown("### 📥 Download Options")
             st.info(f"Target format: **MP3** ({bitrate} kbps) with **embedded cover art & metadata**.")
             
+            # Check if file already exists in downloads
+            existing_single = core.find_existing_mp3(core.DEFAULT_DOWNLOAD_DIR, info.get("title", ""))
+            if existing_single and os.path.exists(existing_single):
+                st.warning(f"ℹ️ **File already downloaded:** `{os.path.basename(existing_single)}` ({core.format_bytes(os.path.getsize(existing_single))}). If you click download, it will reuse this file instantly unless you check 'Force re-download'.")
+
             dl_btn = st.button("🚀 Download MP3 Now", type="primary", use_container_width=True)
             
             if dl_btn:
@@ -309,7 +354,10 @@ with tab_download:
 
                 def update_progress(d):
                     status = d.get("status")
-                    if status == "downloading":
+                    if status == "skipped":
+                        progress_bar.progress(1.0)
+                        status_text.markdown(f"⏩ **{d.get('message', 'Already downloaded!')}**")
+                    elif status == "downloading":
                         pct = d.get("percent", 0.0)
                         progress_bar.progress(min(max(pct / 100.0, 0.0), 1.0))
                         status_text.markdown(f"📥 Downloading audio stream... **{pct:.1f}%**")
@@ -325,6 +373,8 @@ with tab_download:
                         output_dir=core.DEFAULT_DOWNLOAD_DIR,
                         bitrate=bitrate,
                         embed_thumbnail=embed_art,
+                        overwrite=force_overwrite or (not skip_existing),
+                        expected_title=info.get("title"),
                         progress_callback=update_progress,
                     )
 
@@ -332,14 +382,17 @@ with tab_download:
                     progress_bar.progress(1.0)
                     status_text.empty()
                     speed_text.empty()
-                    st.success(f"🎉 Successfully downloaded: **{res.get('title')}**")
+                    
+                    if res.get("was_skipped"):
+                        st.info(f"⏩ Re-used existing MP3: **{os.path.basename(res.get('filepath'))}**")
+                    else:
+                        st.success(f"🎉 Successfully downloaded: **{res.get('title')}**")
                     
                     st.session_state.last_download = res
 
                     # Show player & download buttons
                     filepath = res.get("filepath")
                     if filepath and os.path.exists(filepath):
-                        # In-browser audio player
                         with open(filepath, "rb") as f:
                             audio_bytes = f.read()
                         
@@ -367,16 +420,32 @@ with tab_download:
         # PLAYLIST DOWNLOAD WORKFLOW
         # =========================================================
         else:
-            st.markdown("### 📁 Playlist Organization")
+            st.markdown("### 📁 Playlist Organization & Smart Resume")
             safe_folder_name = core.sanitize_filename(info.get("title", "Playlist"))
             dest_folder = os.path.join(core.DEFAULT_DOWNLOAD_DIR, safe_folder_name)
             
-            st.markdown(f"""
-            <div class="phone-box">
-                📁 <b>Dedicated Playlist Folder:</b> <code>downloads/{safe_folder_name}/</code><br>
-                ✨ <i>All songs will be grouped cleanly inside this playlist folder with ordered track numbering (01, 02...) so your playlist order is preserved!</i>
-            </div>
-            """, unsafe_allow_html=True)
+            # Check how many tracks in this playlist are already present in destination folder
+            tracks = info.get("tracks", [])
+            already_present_count = 0
+            if os.path.exists(dest_folder):
+                for t in tracks:
+                    if core.find_existing_mp3(dest_folder, t["title"], prefix=f"{t['index']:02d}"):
+                        already_present_count += 1
+
+            if already_present_count > 0:
+                st.markdown(f"""
+                <div class="phone-box" style="border-color: #f59e0b;">
+                    ⏩ <b>Smart Resume Active:</b> Found <b>{already_present_count} of {len(tracks)}</b> tracks already downloaded in <code>downloads/{safe_folder_name}/</code>.<br>
+                    ✨ <i>Only the remaining <b>{len(tracks) - already_present_count}</b> tracks will be downloaded! Already downloaded tracks will be skipped instantly.</i>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="phone-box">
+                    📁 <b>Dedicated Playlist Folder:</b> <code>downloads/{safe_folder_name}/</code><br>
+                    ✨ <i>All songs will be grouped cleanly inside this folder with ordered track numbering (01, 02...) so your playlist order is preserved!</i>
+                </div>
+                """, unsafe_allow_html=True)
 
             st.markdown("#### Choose Download Mode")
             download_mode = st.radio(
@@ -386,7 +455,6 @@ with tab_download:
                 label_visibility="collapsed"
             )
 
-            tracks = info.get("tracks", [])
             selected_indices = [t["index"] for t in tracks]
 
             if download_mode == "Choose specific songs to download":
@@ -399,8 +467,11 @@ with tab_download:
                 with st.expander("📋 View & Select Tracks", expanded=True):
                     chosen = []
                     for t in tracks:
+                        prefix_tag = f"#{t['index']:02d}"
+                        is_present = bool(core.find_existing_mp3(dest_folder, t["title"], prefix=f"{t['index']:02d}")) if os.path.exists(dest_folder) else False
+                        status_str = " (✅ downloaded)" if is_present else ""
                         checked = st.checkbox(
-                            f"#{t['index']:02d} — {t['title']} ({t['duration']})",
+                            f"{prefix_tag} — {t['title']} ({t['duration']}){status_str}",
                             value=select_all,
                             key=f"track_{t['index']}"
                         )
@@ -418,8 +489,12 @@ with tab_download:
             )
 
             # Playlist download trigger
+            btn_label = f"🚀 Download Playlist Now ({count_to_dl} Songs)"
+            if already_present_count > 0 and (skip_existing and not force_overwrite):
+                btn_label = f"⏩ Resume / Download Playlist ({count_to_dl} Songs — {already_present_count} already saved)"
+
             dl_playlist_btn = st.button(
-                f"🚀 Download Playlist Now ({count_to_dl} MP3s)",
+                btn_label,
                 type="primary",
                 disabled=(count_to_dl == 0),
                 use_container_width=True
@@ -438,12 +513,14 @@ with tab_download:
                     status = d.get("status", "")
                     prog_overall.progress(pct)
                     status_header.markdown(f"📥 Processing track **{idx} of {total}**: *{title}*")
-                    if status == "downloading":
+                    if status == "skipped":
+                        sub_status.caption(f"⏩ {d.get('message', 'Already downloaded, skipping...')}")
+                    elif status == "downloading":
                         sub_status.caption(f"Speed: {d.get('speed_str', '')} | ETA: {d.get('eta_str', '')}")
                     elif status == "converting":
                         sub_status.caption("🔄 Converting to MP3 and embedding tags...")
 
-                with st.spinner(f"Downloading {count_to_dl} songs into dedicated folder..."):
+                with st.spinner(f"Processing {count_to_dl} songs in playlist folder..."):
                     res = core.download_playlist(
                         playlist_info=info,
                         selected_indices=selected_indices,
@@ -452,6 +529,7 @@ with tab_download:
                         add_track_numbers=add_prefix,
                         bitrate=bitrate,
                         embed_thumbnail=embed_art,
+                        overwrite_existing=force_overwrite or (not skip_existing),
                         overall_progress_callback=playlist_cb,
                     )
 
@@ -460,7 +538,7 @@ with tab_download:
                 sub_status.empty()
 
                 if res.get("success"):
-                    st.success(f"🎉 Successfully downloaded **{res['total_succeeded']}** tracks to: `{res['target_dir']}`")
+                    st.success(f"🎉 **Playlist Ready!** {res.get('total_new', 0)} newly downloaded, {res.get('total_skipped', 0)} skipped (already downloaded). Total {res['total_succeeded']} songs available in `{res['target_dir']}`")
                     
                     # Actions
                     pl_act_col1, pl_act_col2 = st.columns(2)
@@ -493,7 +571,8 @@ with tab_download:
                             if fpath and os.path.exists(fpath):
                                 c1, c2 = st.columns([3, 1])
                                 with c1:
-                                    st.write(f"🎵 **{dt.get('title')}** ({dt.get('filesize_str')})")
+                                    skip_tag = " [Existing]" if dt.get("was_skipped") else " [New]"
+                                    st.write(f"🎵 **{dt.get('title')}** ({dt.get('filesize_str')}){skip_tag}")
                                 with c2:
                                     with open(fpath, "rb") as audio_file:
                                         st.download_button(
@@ -555,54 +634,86 @@ with tab_library:
                             core.reveal_in_finder(it["path"])
                             st.toast("Revealed in Finder!")
 
-# TAB 3: MOBILE & DEPLOY GUIDE
+# TAB 3: MOBILE & FAQ GUIDE
 with tab_guide:
-    st.markdown("### 📱 Using Charcha MP3 on your Phone")
-    st.markdown(f"""
-    1. **Connect Phone to Same Wi-Fi Network**: Ensure your iPhone or Android phone is on the same Wi-Fi as your Mac.
-    2. **Open Safari or Chrome on your Phone**: Enter the local URL:
-       ```
-       {phone_url}
-       ```
-       Or scan the QR code in the sidebar!
-    3. **Paste any YouTube Video or Playlist link**.
-    4. **Download**:
-       - For a single video: Tap **"🚀 Download MP3 Now"** and then **"📥 Save MP3 to Phone"** to save it to your phone's Files / Downloads app!
-       - For a playlist: Tap **"🚀 Download Playlist Now"** and then **"📦 Download Entire Playlist as ZIP"** to save all songs at once!
-    """)
-
-    st.markdown("---")
-    st.markdown("### 🚀 Deployment Options (Access Anywhere Outside Home)")
-    st.markdown("""
-    If you want access outside your home Wi-Fi (e.g. while travelling or on cellular data):
+    st.markdown("### 📱 Using Charcha MP3 on your Phone (Instant Wireless Access)")
     
-    #### Option A: Free Cloud Deployment (Render / Hugging Face Spaces / Railway)
-    1. A `Dockerfile` and `requirements.txt` are included in this project.
-    2. Push this repo to your GitHub:
-       ```bash
-       git init
-       git add .
-       git commit -m "Charcha MP3"
-       git remote add origin <your-repo>
-       git push -u origin main
-       ```
-    3. Connect your GitHub repo to **Render.com** (Web Service -> Docker) or **Hugging Face Spaces** (Docker SDK).
-    4. It gives you a public HTTPS URL (e.g., `https://charcha-mp3.onrender.com`) accessible from anywhere!
-
-    #### Option B: Tailscale (Free Private Mesh Network)
-    - Install **Tailscale** on your Mac and Phone (completely free).
-    - Access using your Mac's Tailscale IP from anywhere on 5G/4G with zero port forwarding!
-    """)
+    phone_c1, phone_c2 = st.columns([1, 2])
+    with phone_c1:
+        st.markdown(f"""
+        <div style="text-align: center; margin: 10px 0;">
+            <div class="qr-container">
+                <img src="{qr_base64}" style="width: 220px; height: 220px; display: block;" alt="Charcha MP3 Mobile QR" />
+            </div>
+            <p style="font-size: 0.85rem; color: #34d399; font-weight: bold; margin-top: 8px;">
+                {phone_url}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with phone_c2:
+        st.markdown(f"""
+        #### 3-Step Setup:
+        1. **Connect to Same Wi-Fi**: Ensure your iPhone or Android phone is connected to the same Wi-Fi router as this Mac.
+        2. **Scan the QR Code**: Point your phone camera at the QR code on the left (or type `{phone_url}` in Safari or Chrome).
+        3. **Download directly to phone**:
+           - **Single track**: Tap **"📥 Save MP3 to Device / Phone"** to save to iOS Files / Android Downloads.
+           - **Entire playlist**: Tap **"📦 Download Entire Playlist as ZIP"** to download all songs in one single zip file!
+        """)
 
     st.markdown("---")
-    st.markdown("### 💻 Terminal CLI Usage")
-    st.code("""
+    st.markdown("### ❓ Frequently Asked Questions & Troubleshooting")
+    
+    with st.expander("🛑 How do I STOP or CLOSE the app?", expanded=True):
+        st.markdown("""
+        - **If running in Terminal / Terminal window**:
+          Press **`Ctrl + C`** on your keyboard to stop the server.
+        - **If started by double-clicking `run.command`**:
+          Simply close the Terminal window or press **`Ctrl + C`**.
+        - **To forcefully kill any running instance in the background**:
+          Run this in your terminal:
+          ```bash
+          killall streamlit
+          # or:
+          lsof -ti :8501 | xargs kill -9
+          ```
+        """)
+
+    with st.expander("⏩ How does Smart Resume (Continue Download) work?", expanded=True):
+        st.markdown("""
+        - When downloading a playlist, Charcha MP3 checks if any songs are already present in the dedicated playlist folder (`downloads/<Playlist Name>/`).
+        - If 20 songs were already downloaded yesterday, and you run the download again today, it will **instantly skip those 20 songs** (0 seconds elapsed) and only download the remaining tracks!
+        - **Force Overwrite**: If you ever want to re-download files, check **"Force re-download / Overwrite"** in the sidebar.
+        """)
+
+    with st.expander("📶 Why does my phone say 'Cannot open page' or time out?"):
+        st.markdown("""
+        1. **Wi-Fi Check**: Your phone and Mac must be connected to the exact same Wi-Fi network (not mobile 5G data).
+        2. **macOS Firewall**: 
+           - Open **System Settings > Network > Firewall**.
+           - If enabled, click **Options** and allow incoming connections for Python / Streamlit, or temporarily disable it.
+        3. **Router AP Isolation**: Some office or public guest networks block devices from seeing each other. Use your home Wi-Fi or your phone's personal hotspot!
+        4. **Alternative (Tailscale)**: If Wi-Fi sharing is blocked, install **Tailscale** (free) on your Mac and Phone to connect securely from anywhere without port forwarding.
+        """)
+
+    with st.expander("🎧 Which music players support these MP3 files?"):
+        st.markdown("""
+        **Literally all of them!**
+        - **iPhone / iPad**: Native Files app, Apple Music, VLC for Mobile, Documents by Readdle, Doppler, Foobar2000.
+        - **Android**: Samsung Music, Google Files, Musicolet, Retro Music Player, Poweramp, Spotify (Local Files enabled).
+        - **Car Stereos & Bluetooth**: USB flash drives plugged into car dashboards will show the song titles, artists, and album artwork automatically because we use standard **ID3v2.3 tags**.
+        """)
+
+    with st.expander("💻 CLI Usage (Command Line)"):
+        st.code("""
 # Download a single video:
 python3 downloader.py "https://youtu.be/ZaQqertwNiw"
 
-# Download an entire playlist into its own folder:
+# Download playlist into its own folder (skips existing files automatically):
 python3 downloader.py "https://youtube.com/playlist?list=PLsJfa_-ihm2UHcz0JkP3nCnlvI4xwJTAx"
+
+# Force re-downloading even if files already exist:
+python3 downloader.py "<URL>" --overwrite
 
 # List playlist tracks without downloading:
 python3 downloader.py "https://youtube.com/playlist?list=..." --list
-    """, language="bash")
+        """, language="bash")
