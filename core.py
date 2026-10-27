@@ -78,9 +78,10 @@ def generate_qr_code_bytes(data: str) -> bytes:
     )
     qr.add_data(data)
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#000000", back_color="#ffffff")
+    img_obj = qr.make_image(fill_color="#000000", back_color="#ffffff")
+    pil_img: Image.Image = img_obj.get_image() if hasattr(img_obj, "get_image") else img_obj._img
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    pil_img.save(buf, format="PNG")
     return buf.getvalue()
 
 def generate_qr_code_base64(data: str) -> str:
