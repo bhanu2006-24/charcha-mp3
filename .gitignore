@@ -1,0 +1,43 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Downloaded media & archives (keep repo clean)
+downloads/
+test_download/
+test_user_dl/
+test_art/
+*.mp3
+*.m4a
+*.webm
+*.opus
+*.wav
+*.flac
+*.zip
+*.part
+*.ytdl
+*.webp
+*.jpg
+*.png
+
+# Streamlit
+.streamlit/secrets.toml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# IDEs & System
+.vscode/
+.idea/
+*.swp
+*.swo
