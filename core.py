@@ -343,7 +343,7 @@ def download_track(
     url: str,
     output_dir: str = DEFAULT_DOWNLOAD_DIR,
     filename_prefix: str = "",
-    bitrate: str = "320",
+    bitrate: str = "128",
     album_name: Optional[str] = None,
     track_number: Optional[int] = None,
     total_tracks: Optional[int] = None,
@@ -490,6 +490,14 @@ def download_track(
                         }
 
             info = ydl.extract_info(url, download=True)
+            if not info:
+                return {
+                    "success": False,
+                    "error": "Failed to extract video information or video is unavailable/private/deleted.",
+                    "filepath": None,
+                    "was_skipped": False,
+                    "was_resumed": False,
+                }
             title = info.get("title") or "Audio"
             artist = info.get("uploader") or info.get("channel") or "Unknown Artist"
             thumbnail = info.get("thumbnail")
@@ -556,7 +564,7 @@ def download_playlist(
     output_dir: str = DEFAULT_DOWNLOAD_DIR,
     subfolder_per_playlist: bool = True,
     add_track_numbers: bool = True,
-    bitrate: str = "320",
+    bitrate: str = "128",
     embed_thumbnail: bool = True,
     overwrite_existing: bool = False,
     overall_progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,

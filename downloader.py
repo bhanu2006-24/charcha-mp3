@@ -30,9 +30,9 @@ def main():
     parser.add_argument("url", help="YouTube video or playlist URL")
     parser.add_argument(
         "-b", "--bitrate",
-        choices=["320", "256", "192", "128"],
-        default="320",
-        help="MP3 audio bitrate (default: 320 kbps)"
+        choices=["128", "192", "256", "320"],
+        default="128",
+        help="MP3 audio bitrate (default: 128 kbps)"
     )
     parser.add_argument(
         "-o", "--output",

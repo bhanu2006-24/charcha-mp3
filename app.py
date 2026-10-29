@@ -188,9 +188,9 @@ with st.sidebar:
     st.markdown("### 🎛️ Audio Settings")
     bitrate = st.selectbox(
         "MP3 Bitrate (Audio Quality)",
-        options=["320", "256", "192", "128"],
+        options=["128", "192", "256", "320"],
         index=0,
-        help="320 kbps gives the highest studio master audio quality."
+        help="128 kbps is the default (smaller file size). Higher bitrates up to 320 kbps are also available."
     )
     embed_art = st.checkbox(
         "Embed Album Cover Art",
@@ -250,7 +250,7 @@ st.markdown(f"""
     </div>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <span class="badge-success">● System Ready</span>
-        <span class="badge-playlist">⚡ 320k Master</span>
+        <span class="badge-playlist">⚡ 128k Default</span>
         <span class="badge-resume">⏩ Smart Resume ON</span>
     </div>
 </div>
@@ -541,28 +541,9 @@ with tab_download:
                     st.success(f"🎉 **Playlist Ready!** {res.get('total_new', 0)} newly downloaded, {res.get('total_skipped', 0)} skipped (already downloaded). Total {res['total_succeeded']} songs available in `{res['target_dir']}`")
                     
                     # Actions
-                    pl_act_col1, pl_act_col2 = st.columns(2)
-                    with pl_act_col1:
-                        if st.button("📂 Open Playlist Folder in Finder", use_container_width=True):
-                            core.reveal_in_finder(res["target_dir"])
-                            st.toast("Opened playlist folder in Finder!")
-                    
-                    with pl_act_col2:
-                        # ZIP download for phone or browser
-                        downloaded_file_paths = [t["filepath"] for t in res.get("downloaded_tracks", []) if t.get("filepath")]
-                        if downloaded_file_paths:
-                            zip_path = core.create_zip_archive(downloaded_file_paths, f"{safe_folder_name}.zip")
-                            if os.path.exists(zip_path):
-                                with open(zip_path, "rb") as zf:
-                                    zip_bytes = zf.read()
-                                st.download_button(
-                                    label=f"📦 Download Entire Playlist as ZIP ({core.format_bytes(len(zip_bytes))})",
-                                    data=zip_bytes,
-                                    file_name=f"{safe_folder_name}.zip",
-                                    mime="application/zip",
-                                    use_container_width=True,
-                                    type="primary"
-                                )
+                    if st.button("📂 Open Playlist Folder in Finder", use_container_width=True):
+                        core.reveal_in_finder(res["target_dir"])
+                        st.toast("Opened playlist folder in Finder!")
 
                     # List downloaded songs with preview players
                     with st.expander(f"🎶 Downloaded Songs List ({len(res['downloaded_tracks'])} Tracks)", expanded=True):
@@ -657,7 +638,6 @@ with tab_guide:
         2. **Scan the QR Code**: Point your phone camera at the QR code on the left (or type `{phone_url}` in Safari or Chrome).
         3. **Download directly to phone**:
            - **Single track**: Tap **"📥 Save MP3 to Device / Phone"** to save to iOS Files / Android Downloads.
-           - **Entire playlist**: Tap **"📦 Download Entire Playlist as ZIP"** to download all songs in one single zip file!
         """)
 
     st.markdown("---")

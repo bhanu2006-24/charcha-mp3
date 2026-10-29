@@ -26,6 +26,8 @@ test_art/
 *.webp
 *.jpg
 *.png
+download_report.json
+list.txt
 
 # Streamlit
 .streamlit/secrets.toml
