@@ -18,6 +18,29 @@ import yt_dlp
 
 DEFAULT_DOWNLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "downloads"))
 
+FAVORITE_CHANNELS = [
+    {
+        "name": "Hit Ambrish Ji (श्री हित अम्बरीष जी)",
+        "handle": "@hitaambrish",
+        "url": "https://www.youtube.com/@hitaambrish/playlists",
+    },
+    {
+        "name": "Bhakti Ashram (भक्ति आश्रम)",
+        "handle": "@BhaktiAshram",
+        "url": "https://www.youtube.com/@BhaktiAshram/playlists",
+    },
+    {
+        "name": "Bhaktmali Sri Bihari Das Ji (भक्तमाली श्री बिहारी दास जी)",
+        "handle": "@bhaktmalisribiharidasji1445",
+        "url": "https://www.youtube.com/@bhaktmalisribiharidasji1445/playlists",
+    },
+    {
+        "name": "Satsang Nitya Prem Ras Dhara (सत्संग नित्य प्रेम रस धारा)",
+        "handle": "@SatsangNityaPremRasDhara",
+        "url": "https://www.youtube.com/@SatsangNityaPremRasDhara/playlists",
+    },
+]
+
 def get_ffmpeg_path() -> Optional[str]:
     """Find the path to ffmpeg executable."""
     found = shutil.which("ffmpeg")
@@ -274,6 +297,42 @@ def tag_mp3_file(
     except Exception:
         pass
 
+def fetch_channel_playlists(channel_url: str) -> List[Dict[str, Any]]:
+    """
+    Fetches the list of playlists available on a channel.
+    """
+    url = channel_url.rstrip("/")
+    if not url.endswith("/playlists"):
+        url += "/playlists"
+
+    opts = get_base_ydl_opts(quiet=True)
+    opts.update({
+        "extract_flat": True,
+        "skip_download": True,
+    })
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if not info:
+            return []
+
+        entries = info.get("entries", [])
+        playlists = []
+        for e in entries:
+            if not e:
+                continue
+            pl_url = e.get("url") or (f"https://www.youtube.com/playlist?list={e.get('id')}" if e.get("id") else None)
+            if not pl_url:
+                continue
+            thumb = e.get("thumbnail") or (e.get("thumbnails", [{}])[-1].get("url") if e.get("thumbnails") else None)
+            playlists.append({
+                "id": e.get("id"),
+                "title": e.get("title") or "Untitled Playlist",
+                "url": pl_url,
+                "thumbnail": thumb,
+            })
+        return playlists
+
 def inspect_url(url: str) -> Dict[str, Any]:
     """
     Inspect a URL to determine if it is a single video or a playlist,
@@ -294,6 +353,34 @@ def inspect_url(url: str) -> Dict[str, Any]:
 
         if is_playlist:
             raw_entries = list(info.get("entries", []))
+
+            # Check if this is a channel playlists listing (e.g. https://www.youtube.com/@channel/playlists)
+            is_channel = "/@" in url or "/channel/" in url or url.rstrip("/").endswith("/playlists")
+            if is_channel and raw_entries and any("playlist?list=" in (e.get("url") or "") for e in raw_entries if e):
+                playlists = []
+                for e in raw_entries:
+                    if not e:
+                        continue
+                    pl_url = e.get("url") or (f"https://www.youtube.com/playlist?list={e.get('id')}" if e.get("id") else None)
+                    if not pl_url:
+                        continue
+                    thumb = e.get("thumbnail") or (e.get("thumbnails", [{}])[-1].get("url") if e.get("thumbnails") else None)
+                    playlists.append({
+                        "id": e.get("id"),
+                        "title": e.get("title") or "Untitled Playlist",
+                        "url": pl_url,
+                        "thumbnail": thumb,
+                    })
+                return {
+                    "type": "channel",
+                    "title": info.get("title") or info.get("uploader") or "YouTube Channel Playlists",
+                    "uploader": info.get("uploader") or info.get("channel") or "Channel",
+                    "channel_url": url,
+                    "playlist_count": len(playlists),
+                    "playlists": playlists,
+                    "original_url": url,
+                }
+
             tracks = []
             for i, entry in enumerate(raw_entries):
                 if not entry:

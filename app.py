@@ -273,26 +273,21 @@ with tab_download:
     with col_inspect:
         inspect_btn = st.button("🔍 Inspect", type="primary", use_container_width=True)
 
-    # Quick sample buttons
-    sample_col1, sample_col2, sample_col3 = st.columns([1.5, 1.5, 2.5])
-    with sample_col1:
-        if st.button("📌 Load Sample Video", use_container_width=True):
-            st.session_state.inspected_url = "https://youtu.be/ZaQqertwNiw"
-            with st.spinner("Inspecting video..."):
-                try:
-                    st.session_state.url_info = core.inspect_url(st.session_state.inspected_url)
-                except Exception as e:
-                    st.error(f"Error: {e}")
-            st.rerun()
-    with sample_col2:
-        if st.button("📂 Load Sample Playlist", use_container_width=True):
-            st.session_state.inspected_url = "https://youtube.com/playlist?list=PLsJfa_-ihm2UHcz0JkP3nCnlvI4xwJTAx&si=F2R6rnoaUinWmmMH"
-            with st.spinner("Inspecting playlist..."):
-                try:
-                    st.session_state.url_info = core.inspect_url(st.session_state.inspected_url)
-                except Exception as e:
-                    st.error(f"Error: {e}")
-            st.rerun()
+    # Favorite Channels
+    st.markdown("#### 🌸 Favorite Channels (Click to browse playlists)")
+    fav_col1, fav_col2 = st.columns(2)
+    fav_cols = [fav_col1, fav_col2, fav_col1, fav_col2]
+    for idx, ch in enumerate(core.FAVORITE_CHANNELS):
+        with fav_cols[idx]:
+            if st.button(f"📺 {ch['name']}", key=f"fav_btn_{idx}", use_container_width=True, help=f"Load playlists from {ch['handle']}"):
+                st.session_state.inspected_url = ch["url"]
+                with st.spinner(f"🔍 Fetching playlists from {ch['name']}..."):
+                    try:
+                        st.session_state.url_info = core.inspect_url(ch["url"])
+                    except Exception as e:
+                        st.session_state.url_info = None
+                        st.error(f"Error loading channel: {e}")
+                st.rerun()
 
     # Trigger inspection on button click or change
     if inspect_btn and url_input.strip():
@@ -307,10 +302,51 @@ with tab_download:
     info = st.session_state.url_info
 
     if info:
-        is_playlist = info.get("type") == "playlist"
+        item_type = info.get("type")
+        is_channel = item_type == "channel"
+        is_playlist = item_type == "playlist"
         
         st.markdown("<hr style='margin: 20px 0; border-color: rgba(255,255,255,0.08);'>", unsafe_allow_html=True)
         
+        if is_channel:
+            # Channel Playlists Browser
+            st.markdown(f"<span class='badge-playlist'>📺 CHANNEL PLAYLISTS ({info.get('playlist_count')} FOUND)</span>", unsafe_allow_html=True)
+            st.markdown(f"### {info.get('title')}")
+            st.markdown(f"**Channel / Creator:** `{info.get('uploader')}` • **Total Playlists:** `{info.get('playlist_count')}`")
+            
+            pl_items = info.get("playlists", [])
+            if pl_items:
+                st.markdown("#### 🎯 Select a Playlist to Download")
+                pl_titles = [f"{i+1}. {p['title']}" for i, p in enumerate(pl_items)]
+                chosen_idx = st.selectbox(
+                    "Browse & Search Playlists",
+                    options=range(len(pl_items)),
+                    format_func=lambda i: pl_titles[i],
+                    help="Type to search or select a playlist from this channel"
+                )
+                selected_pl = pl_items[chosen_idx]
+                
+                ch_c1, ch_c2 = st.columns([1, 2.5])
+                with ch_c1:
+                    if selected_pl.get("thumbnail"):
+                        st.image(selected_pl["thumbnail"], use_container_width=True)
+                    else:
+                        st.markdown("<div style='height: 120px; background: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 2rem;'>📁</div>", unsafe_allow_html=True)
+                with ch_c2:
+                    st.markdown(f"### {selected_pl['title']}")
+                    st.caption(f"Playlist Link: `{selected_pl['url']}`")
+                    if st.button("🚀 Load & Download This Playlist", type="primary", use_container_width=True):
+                        st.session_state.inspected_url = selected_pl["url"]
+                        with st.spinner("Fetching playlist tracks & metadata..."):
+                            try:
+                                st.session_state.url_info = core.inspect_url(selected_pl["url"])
+                            except Exception as e:
+                                st.error(f"Error inspecting playlist: {e}")
+                        st.rerun()
+            else:
+                st.warning("No public playlists found on this channel.")
+            st.stop()
+
         # PREVIEW CARD
         preview_col1, preview_col2 = st.columns([1, 2.5])
         with preview_col1:

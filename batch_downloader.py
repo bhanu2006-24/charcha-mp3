@@ -75,6 +75,17 @@ def main():
 
         item_type = info.get("type")
 
+        if item_type == "channel":
+            print(f"  📺 Channel: {info.get('title')} ({info.get('playlist_count')} playlists available).")
+            print("  ℹ️ Please add specific playlist URLs from this channel to list.txt instead of the entire channel link.")
+            report["failed_items"].append({
+                "url": url,
+                "title": info.get("title"),
+                "type": "channel",
+                "error": "Channel URLs contain multiple playlists. Please list specific playlist links in list.txt."
+            })
+            continue
+
         if item_type == "playlist":
             playlist_title = info.get("title", "Unknown Playlist")
             track_count = info.get("track_count", 0)

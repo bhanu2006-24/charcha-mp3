@@ -27,7 +27,12 @@ def main():
         description="🎵 Charcha MP3 - High Quality YouTube Video & Playlist MP3 Downloader",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("url", help="YouTube video or playlist URL")
+    parser.add_argument("url", nargs="?", default="", help="YouTube video, playlist, or channel URL")
+    parser.add_argument(
+        "-c", "--channels",
+        action="store_true",
+        help="Choose and browse playlists from preset favorite channels"
+    )
     parser.add_argument(
         "-b", "--bitrate",
         choices=["128", "192", "256", "320"],
@@ -62,12 +67,48 @@ def main():
 
     args = parser.parse_args()
 
+    target_url = args.url.strip() if args.url else ""
+    if args.channels or not target_url:
+        print("\n🌸 Preset Favorite Channels:")
+        for idx, ch in enumerate(core.FAVORITE_CHANNELS, 1):
+            print(f"  [{idx}] {ch['name']} ({ch['handle']})")
+        choice = input("\nSelect channel number (1-4, or 'q' to quit): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(core.FAVORITE_CHANNELS):
+            target_url = core.FAVORITE_CHANNELS[int(choice) - 1]["url"]
+        else:
+            print("Cancelled.")
+            return
+
     print("\n🔍 Inspecting URL...")
     try:
-        info = core.inspect_url(args.url)
+        info = core.inspect_url(target_url)
     except Exception as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
+
+    if info.get("type") == "channel":
+        print(f"\n📺 Channel: {info.get('title')}")
+        print(f"📁 Playlists found: {info.get('playlist_count')}")
+        playlists = info.get("playlists", [])
+        if not playlists:
+            print("No playlists found on this channel.")
+            return
+        print("\nAvailable Playlists:")
+        for i, pl in enumerate(playlists, 1):
+            print(f"  [{i:02d}] {pl['title']}")
+        
+        choice = input(f"\nEnter playlist number to download (1-{len(playlists)}, or 'q' to quit): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(playlists):
+            selected_pl = playlists[int(choice) - 1]
+            print(f"\n🔍 Inspecting selected playlist: {selected_pl['title']}...")
+            try:
+                info = core.inspect_url(selected_pl["url"])
+            except Exception as e:
+                print(f"❌ Error inspecting playlist: {e}")
+                sys.exit(1)
+        else:
+            print("Cancelled.")
+            return
 
     is_playlist = info.get("type") == "playlist"
 
@@ -158,7 +199,7 @@ def main():
 
         print(f"\n📥 Processing {args.bitrate}k MP3...")
         res = core.download_track(
-            url=args.url,
+            url=target_url,
             output_dir=args.output,
             bitrate=args.bitrate,
             embed_thumbnail=not args.no_art,
